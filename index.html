@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Weather App</title>
+  <style>
+    body {
+      font-family: Arial;
+      background: #eaf6ff;
+      text-align: center;
+      padding: 30px;
+    }
+
+    input, button {
+      padding: 12px;
+      margin: 5px;
+      border-radius: 8px;
+      border: 1px solid #aaa;
+    }
+
+    button {
+      cursor: pointer;
+      background: #2196f3;
+      color: white;
+      border: none;
+    }
+
+    .weather {
+      max-width: 600px;
+      margin: 25px auto;
+    }
+
+    .card {
+      background: white;
+      padding: 18px;
+      margin: 10px;
+      border-radius: 12px;
+      box-shadow: 0 3px 10px #bbb;
+    }
+
+    .hours {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>🌤️ Weather App</h1>
+
+  <input id="location" placeholder="Enter city name">
+  <button onclick="getWeather()">Search</button>
+  <button onclick="getLocation()">📍 My Location</button>
+  <button onclick="location.reload()">Refresh</button>
+
+  <div id="weather"></div>
+
+<script>
+async function getWeather(city = document.getElementById("location").value) {
+  if (!city) return alert("Enter a location");
+
+  document.getElementById("weather").innerHTML = "Loading...";
+
+  try {
+    const geo = await fetch(
+      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=en&format=json`
+    ).then(r => r.json());
+
+    if (!geo.results) throw new Error("Location not found");
+
+    const { latitude, longitude, name, country } = geo.results[0];
+
+    const data = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&hourly=temperature_2m,wind_speed_10m,precipitation_probability,weather_code&past_hours=24&forecast_hours=24&timezone=auto`
+    ).then(r => r.json());
+
+    const h = data.hourly;
+
+    let html = `
+      <div class="card">
+        <h2>${name}, ${country}</h2>
+        <h3>24 Hours Before & After</h3>
+      </div>
+
+      <div class="hours">
+    `;
+
+    h.time.forEach((time, i) => {
+      html += `
+        <div class="card">
+          <b>${new Date(time).toLocaleTimeString([], {
+            hour: "2-digit", minute: "2-digit"
+          })}</b>
+
+          <p>🌡️ ${h.temperature_2m[i]}°C</p>
+          <p>💨 ${h.wind_speed_10m[i]} km/h</p>
+          <p>🌧️ ${h.precipitation_probability[i]}% rain</p>
+          <p>${weatherText(h.weather_code[i])}</p>
+        </div>
+      `;
+    });
+
+    html += "</div>";
+    document.getElementById("weather").innerHTML = html;
+
+  } catch (error) {
+    document.getElementById("weather").innerHTML =
+      `<div class="card">❌ ${error.message}</div>`;
+  }
+}
+
+function weatherText(code) {
+  if (code === 0) return "☀️ Sunny";
+  if ([1,2,3].includes(code)) return "⛅ Cloudy";
+  if ([45,48].includes(code)) return "🌫️ Foggy";
+  if ([51,53,55,61,63,65,80,81,82].includes(code)) return "🌧️ Raining";
+  if ([71,73,75,77,85,86].includes(code)) return "❄️ Snow";
+  if ([95,96,99].includes(code)) return "⛈️ Thunderstorm";
+  return "🌤️ Unknown";
+}
+
+function getLocation() {
+  navigator.geolocation.getCurrentPosition(
+    position => {
+      const { latitude, longitude } = position.coords;
+      getWeatherByCoordinates(latitude, longitude);
+    },
+    () => alert("Location permission denied")
+  );
+}
+
+async function getWeatherByCoordinates(lat, lon) {
+  document.getElementById("weather").innerHTML = "Loading...";
+
+  const data = await fetch(
+    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,wind_speed_10m,precipitation_probability,weather_code&past_hours=24&forecast_hours=24&timezone=auto`
+  ).then(r => r.json());
+
+  const h = data.hourly;
+
+  document.getElementById("weather").innerHTML =
+    `<div class="card">
+      <h2>📍 Your Current Location</h2>
+      <p>🌡️ ${h.temperature_2m[24]}°C</p>
+      <p>💨 ${h.wind_speed_10m[24]} km/h</p>
+      <p>🌧️ ${h.precipitation_probability[24]}% chance of rain</p>
+      <p>${weatherText(h.weather_code[24])}</p>
+    </div>`;
+}
+</script>
+
+</body>
+</html>
